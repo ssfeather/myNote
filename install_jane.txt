@@ -1,0 +1,88 @@
+# debian9
+# add source 
+deb http://mirrors.163.com/debian/ stretch main non-free contrib 
+deb http://mirrors.163.com/debian/ stretch-updates main non-free contrib 
+deb http://mirrors.163.com/debian-security/ stretch/updates main non-free contrib
+
+wget --quiet -O - https://raw.githubusercontent.com/obspy/obspy/master/misc/debian/public.key | apt-key add -
+
+# install postgresql
+apt-get install postgresql postgresql-contrib postgis
+su
+su - postgres
+createuser --encrypted --pwprompt jane
+createdb --owner=jane jane
+psql --command="CREATE EXTENSION postgis;" jane
+exit
+
+# move postgresql to /Data
+service postgresql stop
+mkdir /Data
+cp -rf /var/lib/postgresql/9.6/main/ /Data/postgresql/
+chown -R postgres:postgres /Data/postgresql/
+chmod 700 /Data/postgresql/
+vi /etc/postgresql/9.6/main/postgresql.conf
+data_directory='/Data/postgresql'
+service postgresql start
+
+# AS ROOT!
+apt-get install python3-psycopg2 \
+    python3-markdown \
+    python3-yaml \
+    python3-defusedxml \
+    python3-gdal \
+    python3-geopy \
+    python3-flake8 \
+    python3-pip \
+    ipython3 \
+    git
+
+git clone https://github.com/krischer/jane.git
+cd jane
+
+# AS USER!
+pip3 install --user \
+    "django==1.9.3" \
+    "djangorestframework==3.5.4" \
+    "djangorestframework-gis==0.14" \
+    "djangorestframework-jsonp==1.0.2" \
+    "djangorestframework-xml==1.4.0" \
+    "djangorestframework-yaml==1.0.3" \
+    "django-cors-headers==1.3.1" \
+    "django-debug-toolbar==1.5" \
+    "django-plugins==0.3.0" \
+    "geojson==2.5.0" \
+    "mkdocs==1.0.4" \
+    "mkdocs-bootswatch==1.0" \
+    "defusedxml==0.6.0" \
+    "obspy==1.0.2"
+
+# config local_settings.py
+cp jane/src/jane/local_settings.py.example jane/src/jane/local_settings.py
+vim jane/src/jane/local_settings.py
+
+# initialization
+cd jane/src
+python3 manage.py migrate
+python3 manage.py createsuperuser
+python3 manage.py collectstatica
+
+# disable django tool bar
+vim jane/src/jane/settings.py
+annotate 'debug_toolbar', 
+
+# change web contain
+vim jane/src/jane/jane/templates/jane/base.html
+vim jane/src/jane/fdsnws/templates/fdsnws/station/1/index.html
+vim jane/src/jane/fdsnws/templates/fdsnws/dataselect/1/index.html
+vim jane/src/jane/fdsnws/templates/fdsnws/event/1/index.html
+
+# run server
+python3 manage.py runserver 192.168.100.3:8000
+
+# import wave data
+python3 manage.py index_waveforms -v=3 -i0.0 -1 -n10 --check-duplicates -d$DATA -l$LOG
+
+# import stationxml
+python3 manage.py upload_documents stationxml chinaA.dataless.xml --user sysop
+
